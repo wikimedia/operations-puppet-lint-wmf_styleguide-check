@@ -1,0 +1,18 @@
+Metrics/LineLength:
+  Exclude:
+    - 'spec/puppet-lint/plugins/check_wmf_styleguide_check_spec.rb'
+  Max: 120
+
+Metrics/MethodLength:
+  Max: 15
+
+# This is something I really don't care about
+Layout/IndentHeredoc:
+  Enabled: false
+
+
+Style/SymbolArray:
+  EnforcedStyle: brackets
+
+Style/WordArray:
+  EnforcedStyle: brackets

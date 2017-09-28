@@ -17,7 +17,12 @@ class PuppetResource
     end
   end
 
+  # rubocop:disable Style/CyclomaticComplexity, Metrics/MethodLength
   def parse_params
+    # Parse parameters and return a hash containing
+    # the parameter name as a key and a hash of tokens as value:
+    #  :param => the parameter token
+    #  :value => All the code tokens that represent the value of the parameter
     res = {}
     current_param = nil
     in_value = false
@@ -41,6 +46,7 @@ class PuppetResource
     end
     res
   end
+  # rubocop:enable Style/CyclomaticComplexity, Metrics/MethodLength
 
   def params
     @params || parse_params
@@ -67,6 +73,7 @@ class PuppetResource
   end
 
   def filename
+    puts @resource
     @resource[:filename]
   end
 
@@ -83,63 +90,236 @@ class PuppetResource
   end
 
   def hiera_calls
-    @resource[:tokens].select do |token|
-      token.hiera?
-    end
+    @resource[:tokens].select(&:hiera?)
   end
 
   def included_classes
-    @resource[:tokens].map{ |t| t.included_class }.compact
+    @resource[:tokens].map(&:included_class).compact
   end
 
   def declared_classes
-    @resource[:tokens].map{ |t| t.declared_class }.compact
+    @resource[:tokens].map(&:declared_class).compact
   end
 
   def declared_resources
-    @resource[:tokens].select{ |t| t.declared_type? }
+    @resource[:tokens].select(&:declared_type?)
   end
 
   def resource?(name)
-    @resource[:tokens].select{ |t| t.declared_type? && t.value.gsub(/^::/, '') == name }
+    @resource[:tokens].select { |t| t.declared_type? && t.value.gsub(/^::/, '') == name }
   end
 end
 
-class PuppetLint::Lexer
-  class Token
-    # Extend the basic token with utility functions
-    def function?
-      @type == :NAME && @next_code_token.type == :LPAREN
-    end
+class PuppetLint
+  class Lexer
+    # Add some utility functions to the PuppetLint::Lexer::Token class
+    class Token
+      # Extend the basic token with utility functions
+      def function?
+        @type == :NAME && @next_code_token.type == :LPAREN
+      end
 
-    def hiera?
-      function? && @value == 'hiera'
-    end
+      def hiera?
+        function? && @value == 'hiera'
+      end
 
-    def class_include?
-      @type == :NAME && ['include', 'require'].include?(@value) && @next_code_token.type != :FARROW
-    end
+      def class_include?
+        @type == :NAME && ['include', 'require'].include?(@value) && @next_code_token.type != :FARROW
+      end
 
-    def included_class
-      return unless class_include?
-      if @next_code_token.type == :LPAREN
-        return @next_code_token.next_code_token
-      else
-        return @next_code_token
+      def included_class
+        return unless class_include?
+        return @next_code_token.next_code_token if @next_code_token.type == :LPAREN
+        @next_code_token
+      end
+
+      def declared_class
+        return unless @type == :CLASS
+        # In a class declaration, the first token is the class declaration itself.
+        return if @next_code_token.type != :LBRACE
+        @next_code_token.next_code_token
+      end
+
+      def declared_type?
+        @type == :NAME && @next_code_token.type == :LBRACE && @prev_code_token.type != :CLASS
       end
     end
-
-    def declared_class
-      return unless @type == :CLASS
-      # In a class declaration, the first token is the class declaration itself.
-      return if @next_code_token.type != :LBRACE
-      @next_code_token.next_code_token
-    end
-
-    def declared_type?
-      @type == :NAME && @next_code_token.type == :LBRACE && @prev_code_token.type != :CLASS
-    end
   end
+end
+
+# Checks and functions
+def check_profile(klass)
+  # All parameters of profiles should have a default value that is a hiera lookup
+  params_without_hiera_defaults klass
+  # All hiera lookups should be in parameters
+  hiera_not_in_params klass
+  # Only a few selected classes should be included in a profile
+  profile_illegal_include klass
+  # System::role only goes in roles
+  check_no_system_role klass
+end
+
+def check_role(klass)
+  # Hiera lookups within a role are forbidden
+  hiera klass
+  # A role should only include profiles
+  include_not_profile klass
+  # A call, and only one, to system::role will be done
+  check_system_role klass
+  # No defines should be present in a role
+  check_no_defines klass
+end
+
+def check_class(klass)
+  # No hiera lookups allowed in a class.
+  hiera klass
+  # Cannot include or declare classes from other modules
+  class_illegal_include klass
+  illegal_class_declaration klass
+  # System::role only goes in roles
+  check_no_system_role klass
+end
+
+def check_define(define)
+  # No hiera calls are admitted in defines. ever.
+  hiera define
+  # No class can be included in defines, like in classes
+  class_illegal_include define
+  # Non-profile defines should respect the rules for classes
+  illegal_class_declaration define unless define.module_name == 'profile'
+end
+
+def hiera(klass)
+  hiera_errors(klass.hiera_calls, klass)
+end
+
+def params_without_hiera_defaults(klass)
+  # Finds parameters that have no hiera-defined default value.
+  klass.params.each do |name, data|
+    next unless data[:value].select(&:hiera?).empty?
+    token = data[:param]
+    msg = {
+      message: "wmf-style: Parameter '#{name}' of class '#{klass.name}' has no call to hiera",
+      line: token.line,
+      column: token.column
+    }
+    notify :error, msg
+  end
+end
+
+def hiera_not_in_params(klass)
+  tokens = klass.hiera_calls.reject do |token|
+    maybe_param = token.prev_code_token.prev_code_token
+    klass.params.keys.include?(maybe_param.value)
+  end
+  hiera_errors(tokens, klass)
+end
+
+def hiera_errors(tokens, klass)
+  tokens.each do |token|
+    msg = {
+      message: "wmf-style: Found hiera call in #{klass.type} '#{klass.name}'",
+      line: token.line,
+      column: token.column
+    }
+    notify :error, msg
+  end
+end
+
+def profile_illegal_include(klass)
+  modules_include_ok = ['profile', 'passwords']
+  classes_include_ok = ['lvs::configuration', 'network::constants']
+  klass.included_classes.each do |token|
+    class_name = token.value.gsub(/^::/, '')
+    next if classes_include_ok.include? class_name
+    module_name = class_name.split('::')[0]
+    next if modules_include_ok.include? module_name
+    msg = {
+      message: "wmf-style: profile '#{klass.name}' includes non-profile class #{class_name}",
+      line: token.line,
+      column: token.column
+    }
+    notify :error, msg
+  end
+end
+
+def class_illegal_include(klass)
+  modules_include_ok = [klass.module_name]
+  klass.included_classes.each do |token|
+    class_name = token.value.gsub(/^::/, '')
+    module_name = class_name.split('::')[0]
+    next if modules_include_ok.include? module_name
+    msg = {
+      message: "wmf-style: #{klass.type} '#{klass.name}' includes #{class_name} from another module",
+      line: token.line,
+      column: token.column
+    }
+    notify :error, msg
+  end
+end
+
+def include_not_profile(klass)
+  modules_include_ok = ['role', 'profile', 'standard']
+  klass.included_classes.each do |token|
+    class_name = token.value.gsub(/^::/, '')
+    module_name = class_name.split('::')[0]
+    next if modules_include_ok.include? module_name
+    msg = {
+      message: "wmf-style: role '#{klass.name}' includes #{class_name} which is neither a role nor a profile",
+      line: token.line,
+      column: token.column
+    }
+    notify :error, msg
+  end
+end
+
+def illegal_class_declaration(klass)
+  # Classes and defines should NEVER declare
+  # classes from other modules.
+  # If a class has multiple such occurrences, it should be a profile
+  klass.declared_classes.each do |token|
+    class_name = token.value.gsub(/^::/, '')
+    module_name = class_name.split('::')[0]
+    next if klass.module_name == module_name
+    msg = {
+      message: "wmf-style: #{klass.type} '#{klass.name}' declares class #{class_name} from another module",
+      line: token.line,
+      column: token.column
+    }
+    notify :error, msg
+  end
+end
+
+def check_no_system_role(klass)
+  # The system::role define should only be used in roles
+  klass.resource?('system::role').each do |token|
+    msg = {
+      message: "wmf-style: #{klass.type} '#{klass.name}' declares system::role, which should only be used in roles",
+      line: token.line,
+      column: token.column
+    }
+    notify :error, msg
+  end
+end
+
+def check_system_role(klass)
+  return if klass.resource?('system::role').length == 1
+  msg = {
+    message: "wmf-style: role '#{klass.name}' should declare system::role once",
+    line: 1,
+    column: 1
+  }
+  notify :error, msg
+end
+
+def check_no_defines(klass)
+  return if klass.declared_resources == klass.resource?('system::role')
+  msg = {
+    message: "wmf-style: role '#{klass.name}' should not include defines",
+    line: 1,
+    column: 1
+  }
+  notify :error, msg
 end
 
 PuppetLint.new_check(:wmf_styleguide) do
@@ -159,199 +339,5 @@ PuppetLint.new_check(:wmf_styleguide) do
       define = PuppetResource.new(df)
       check_define define
     end
-  end
-
-  def check_profile(klass)
-    # All parameters of profiles should have a default value that is a hiera lookup
-    params_without_hiera_defaults klass
-    # All hiera lookups should be in parameters
-    hiera_not_in_params klass
-    # Only a few selected classes should be included in a profile
-    profile_illegal_include klass
-    # System::role only goes in roles
-    check_no_system_role klass
-  end
-
-  def check_role(klass)
-    # Hiera lookups within a role are forbidden
-    hiera klass
-    # A role should only include profiles
-    include_not_profile klass
-    # A call, and only one, to system::role will be done
-    check_system_role klass
-    # No defines should be present in a role
-    check_no_defines klass
-  end
-
-  def check_class(klass)
-    # No hiera lookups allowed in a class.
-    hiera klass
-    # Cannot include or declare classes from other modules
-    class_illegal_include klass
-    illegal_class_declaration klass
-    # System::role only goes in roles
-    check_no_system_role klass
-  end
-
-  def check_define(define)
-    # No hiera calls are admitted in defines. ever.
-    hiera define
-    # No class can be included in defines, like in classes
-    class_illegal_include define
-    # Non-profile defines should respect the rules for classes
-    if define.module_name != 'profile'
-      illegal_class_declaration define
-    end
-  end
-
-  def hiera(klass)
-    hiera_errors(klass.hiera_calls, klass)
-  end
-
-  def params_without_hiera_defaults(klass)
-    # Finds parameters that have no hiera-defined default value.
-    klass.params.each do |name, data|
-      next unless data[:value].select { |t| t.hiera? }.empty?
-      token = data[:param]
-      msg = {
-        message: "wmf-style: Parameter '#{name}' of class '#{klass.name}' has no call to hiera",
-        line: token.line,
-        column: token.column,
-        path: klass.path,
-        filename: klass.filename
-      }
-      notify :error, msg
-    end
-  end
-
-  def hiera_not_in_params(klass)
-    tokens = klass.hiera_calls.select do |token|
-      maybe_param = token.prev_code_token.prev_code_token
-      !klass.params.keys.include?(maybe_param.value)
-    end
-    hiera_errors(tokens, klass)
-  end
-
-  def hiera_errors(tokens, klass)
-    tokens.each do |token|
-      msg = {
-        message: "wmf-style: Found hiera call in #{klass.type} '#{klass.name}'",
-        line: token.line,
-        column: token.column,
-        path: klass.path,
-        filename: klass.filename
-      }
-      notify :error, msg
-    end
-  end
-
-  def profile_illegal_include(klass)
-    modules_include_ok = ['profile', 'passwords']
-    classes_include_ok = ['lvs::configuration', 'network::constants']
-    klass.included_classes.each do |token|
-      class_name = token.value.gsub(/^::/, '')
-      next if classes_include_ok.include? class_name
-      module_name = class_name.split('::')[0]
-      next if modules_include_ok.include? module_name
-      msg = {
-        message: "wmf-style: profile '#{klass.name}' includes non-profile class #{class_name}",
-        line: token.line,
-        column: token.column,
-        path: klass.path,
-        filename: klass.filename
-      }
-      notify :error, msg
-    end
-  end
-
-  def class_illegal_include(klass)
-    modules_include_ok = [klass.module_name]
-    klass.included_classes.each do |token|
-      class_name = token.value.gsub(/^::/, '')
-      module_name = class_name.split('::')[0]
-      next if modules_include_ok.include? module_name
-      msg = {
-        message: "wmf-style: #{klass.type} '#{klass.name}' includes #{class_name} from another module",
-        line: token.line,
-        column: token.column,
-        path: klass.path,
-        filename: klass.filename
-      }
-      notify :error, msg
-    end
-  end
-
-  def include_not_profile(klass)
-    modules_include_ok = ['role', 'profile', 'standard']
-    klass.included_classes.each do |token|
-      class_name = token.value.gsub(/^::/, '')
-      module_name = class_name.split('::')[0]
-      next if modules_include_ok.include? module_name
-      msg = {
-        message: "wmf-style: role '#{klass.name}' includes #{class_name} which is neither a role nor a profile",
-        line: token.line,
-        column: token.column,
-        path: klass.path,
-        filename: klass.filename
-      }
-      notify :error, msg
-    end
-  end
-
-  def illegal_class_declaration(klass)
-    # Classes and defines should NEVER declare
-    # classes from other modules.
-    # If a class has multiple such occurrences, it should be a profile
-    klass.declared_classes.each do |token|
-      class_name = token.value.gsub(/^::/, '')
-      module_name = class_name.split('::')[0]
-      next if klass.module_name == module_name
-      msg = {
-        message: "wmf-style: #{klass.type} '#{klass.name}' declares class #{class_name} from another module",
-        line: token.line,
-        column: token.column,
-        path: klass.path,
-        filename: klass.filename
-      }
-      notify :error, msg
-    end
-  end
-
-  def check_no_system_role(klass)
-    # The system::role define should only be used in roles
-    klass.resource?('system::role').each do |token|
-      msg = {
-        message: "wmf-style: #{klass.type} '#{klass.name}' declares system::role, which should only be used in roles",
-        line: token.line,
-        column: token.column,
-        path: klass.path,
-        filename: klass.filename
-      }
-      notify :error, msg
-    end
-  end
-
-  def check_system_role(klass)
-    return if klass.resource?('system::role').length == 1
-    msg = {
-      message: "wmf-style: role '#{klass.name}' should declare system::role once",
-      line: 1,
-      column: 1,
-      path: klass.path,
-      filename: klass.filename
-    }
-    notify :error, msg
-  end
-
-  def check_no_defines(klass)
-    return if klass.declared_resources == klass.resource?('system::role')
-    msg = {
-      message: "wmf-style: role '#{klass.name}' should not include defines",
-      line: 1,
-      column: 1,
-      path: klass.path,
-      filename: klass.filename
-    }
-    notify :error, msg
   end
 end

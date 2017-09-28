@@ -25,9 +25,11 @@ Gem::Specification.new do |spec|
     * Check for the use of the include keyword in profiles
   EOF
 
-  spec.add_dependency 'puppet-lint', '~> 1.0'
+  spec.add_dependency 'puppet-lint', '~> 2.0.0'
+  spec.add_development_dependency 'git', '~> 1.3.0'
   spec.add_development_dependency 'rspec', '~> 3.0'
   spec.add_development_dependency 'rspec-its', '~> 1.0'
   spec.add_development_dependency 'rspec-collection_matchers', '~> 1.0'
   spec.add_development_dependency 'rake'
+  spec.add_development_dependency 'rubocop', '~> 0.49.1'
 end
