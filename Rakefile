@@ -8,6 +8,8 @@ RuboCop::RakeTask.new(:rubocop)
 
 task default: [:spec, :rubocop]
 
+task test: [:default]
+
 def git_changed_in_head(path)
   g = Git.open(path)
   diff = g.diff('HEAD^')

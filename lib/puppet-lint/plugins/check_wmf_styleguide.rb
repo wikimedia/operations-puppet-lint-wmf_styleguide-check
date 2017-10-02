@@ -17,7 +17,7 @@ class PuppetResource
     end
   end
 
-  # rubocop:disable Style/CyclomaticComplexity, Metrics/MethodLength
+  # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
   def parse_params
     # Parse parameters and return a hash containing
     # the parameter name as a key and a hash of tokens as value:
@@ -46,7 +46,7 @@ class PuppetResource
     end
     res
   end
-  # rubocop:enable Style/CyclomaticComplexity, Metrics/MethodLength
+  # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
 
   def params
     @params || parse_params

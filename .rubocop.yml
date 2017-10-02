@@ -6,6 +6,9 @@ Metrics/LineLength:
 Metrics/MethodLength:
   Max: 15
 
+Metrics/BlockLength:
+  Enabled: false
+
 # This is something I really don't care about
 Layout/IndentHeredoc:
   Enabled: false
