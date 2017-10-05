@@ -64,6 +64,13 @@ define foo::bar (
 )
 EOF
 
+define_ko = <<-EOF
+define foo::fixme ($a=hiera('something')) {
+       include ::foo
+       class { '::bar': }
+}
+EOF
+
 describe 'wmf_styleguide' do
   context 'class correctly written' do
     let(:code) { class_ok }
@@ -123,6 +130,15 @@ describe 'wmf_styleguide' do
     let(:code) { define_ok }
     it 'should not detect any problems' do
       expect(problems).to have(0).problems
+    end
+  end
+  context 'defined type with violations' do
+    let(:code) { define_ko }
+    it 'should not contain hiera calls' do
+      expect(problems).to contain_error("wmf-style: Found hiera call in defined type 'foo::fixme' for 'something'").on_line(1)
+    end
+    it 'should not include or define any class' do
+      expect(problems).to contain_error("wmf-style: defined type 'foo::fixme' declares class bar from another module").on_line(3)
     end
   end
 end

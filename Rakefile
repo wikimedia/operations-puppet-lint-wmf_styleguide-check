@@ -31,7 +31,7 @@ task :check_commit do
   # Only enable the wmf_styleguide
   PuppetLint.configuration.checks.each do |check|
     if check == :wmf_styleguide
-      PuppetLint.configuration.configuration.send('enable_wmf_styleguide')
+      PuppetLint.configuration.send('enable_wmf_styleguide')
     else
       PuppetLint.configuration.send("disable_#{check}")
     end
