@@ -143,6 +143,14 @@ class PuppetLint
       def declared_type?
         @type == :NAME && @next_code_token.type == :LBRACE && @prev_code_token.type != :CLASS
       end
+
+      def node_def?
+        [:SSTRING, :STRING, :NAME, :REGEX].include?(@type)
+      end
+
+      def role_keyword?
+        @type == :NAME && @value = 'role' && @next_code_token.type == :LPAREN
+      end
     end
   end
 end
@@ -323,9 +331,86 @@ def check_no_defines(klass)
   notify :error, msg
 end
 
+# rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/AbcSize, Metrics/CyclomaticComplexity
+def check_node(node)
+  title = node[:title_tokens].map(&:value).join(', ')
+  node[:tokens].each do |token|
+    msg = nil
+    if token.hiera?
+      msg = {
+        message: "wmf-style: Found hiera call in node '#{title}'",
+        line: token.line,
+        column: token.column
+      }
+
+    elsif token.class_include?
+      msg = {
+        message: "wmf-style: node '#{title}' includes class #{token.included_class.value}",
+        line: token.line,
+        column: token.column
+      }
+    elsif token.declared_class
+      msg = {
+        message: "wmf-style: node '#{title}' declares class #{token.declared_class.value}",
+        line: token.line,
+        column: token.column
+      }
+    elsif token.declared_type?
+      msg = {
+        message: "wmf-style: node '#{title}' declares #{token.value}",
+        line: token.line,
+        column: token.column
+      }
+    elsif token.role_keyword? && token.next_code_token.next_code_token.next_code_token.type != :RPAREN
+      msg = {
+        message: "wmf-style: node '#{title}' includes multiple roles",
+        line: token.line,
+        column: token.column
+      }
+    end
+    notify :error, msg if msg
+  end
+end
+
 PuppetLint.new_check(:wmf_styleguide) do
-  def check
-    # Modules whose classes can be included elsewhere
+  def node_indexes
+    # Override the faulty "node_indexes" method from puppet-lint
+    result = []
+    in_node_def = false
+    braces_level = nil
+    start = 0
+    title_tokens = []
+    tokens.each_with_index do |token, i|
+      if token.type == :NODE
+        braces_level = 0
+        start = i
+        in_node_def = true
+        next
+      end
+      # If we're not within a node definition, skip this token
+      next unless in_node_def
+      case token.type
+      when :LBRACE
+        title_tokens = tokens[start + 1..(i - 1)].select(&:node_def?) if braces_level.zero?
+        braces_level += 1
+      when :RBRACE
+        braces_level -= 1
+        if braces_level.zero?
+          result << {
+            start: start,
+            end: i,
+            tokens: tokens[start..i],
+            title_tokens: title_tokens
+          }
+          in_node_def = false
+        end
+      end
+    end
+    result
+  end
+  # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PercievedComplexity
+
+  def check_classes
     class_indexes.each do |cl|
       klass = PuppetResource.new(cl)
       if klass.profile?
@@ -336,9 +421,16 @@ PuppetLint.new_check(:wmf_styleguide) do
         check_class klass
       end
     end
+  end
+
+  def check
+    check_classes
     defined_type_indexes.each do |df|
       define = PuppetResource.new(df)
       check_define define
+    end
+    node_indexes.each do |node|
+      check_node node
     end
   end
 end
