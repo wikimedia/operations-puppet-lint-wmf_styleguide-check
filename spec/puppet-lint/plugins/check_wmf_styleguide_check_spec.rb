@@ -12,7 +12,7 @@ EOF
 
 class_ko = <<-EOF
 class foo($t=hiera('foo::title')) {
-       $msg = hiera("foo::bar")
+       $msg = hiera( "foo::bar")
        notice($msg)
        notice($t)
        include ::passwords::redis
@@ -88,9 +88,8 @@ describe 'wmf_styleguide' do
   context 'class with errors' do
     let(:code) { class_ko }
     it 'should create errors for hiera declarations' do
-      hiera_msg = "wmf-style: Found hiera call in class 'foo'"
-      expect(problems).to contain_error(hiera_msg).on_line(1).in_column(14)
-      expect(problems).to contain_error(hiera_msg).on_line(2).in_column(15)
+      expect(problems).to contain_error("wmf-style: Found hiera call in class 'foo' for 'foo::title'").on_line(1).in_column(14)
+      expect(problems).to contain_error("wmf-style: Found hiera call in class 'foo' for 'foo::bar'").on_line(2).in_column(15)
     end
     it 'should create errors for included classes' do
       expect(problems).to contain_error("wmf-style: class 'foo' includes passwords::redis from another module").on_line(5).in_column(16)
@@ -104,7 +103,7 @@ describe 'wmf_styleguide' do
       expect(problems).to contain_error("wmf-style: Parameter 'test' of class 'profile::fixme' has no call to hiera").on_line(2).in_column(7)
     end
     it 'should create errors for hiera calls in body' do
-      expect(problems).to contain_error("wmf-style: Found hiera call in class 'profile::fixme'").on_line(5).in_column(13)
+      expect(problems).to contain_error("wmf-style: Found hiera call in class 'profile::fixme' for 'role'").on_line(5).in_column(13)
     end
     it 'should create errors for use of system::role' do
       expect(problems).to contain_error("wmf-style: class 'profile::fixme' declares system::role, which should only be used in roles").on_line(6).in_column(5)

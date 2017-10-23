@@ -217,8 +217,9 @@ end
 
 def hiera_errors(tokens, klass)
   tokens.each do |token|
+    value = token.next_code_token.next_code_token.value
     msg = {
-      message: "wmf-style: Found hiera call in #{klass.type} '#{klass.name}'",
+      message: "wmf-style: Found hiera call in #{klass.type} '#{klass.name}' for '#{value}'",
       line: token.line,
       column: token.column
     }
