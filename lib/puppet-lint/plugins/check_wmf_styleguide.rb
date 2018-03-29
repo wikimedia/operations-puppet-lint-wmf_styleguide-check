@@ -355,7 +355,7 @@ def check_node(node)
         line: token.line,
         column: token.column
       }
-    elsif token.declared_type?
+    elsif token.declared_type? && token.value != 'interface::add_ip6_mapped'
       msg = {
         message: "wmf-style: node '#{title}' declares #{token.value}",
         line: token.line,
