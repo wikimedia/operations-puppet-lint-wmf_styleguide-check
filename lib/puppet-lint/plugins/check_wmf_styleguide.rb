@@ -1,4 +1,8 @@
+# frozen_string_literal: true
+
 # Class to manage puppet resources.
+# See how we extend PuppetLint::Lexer::Token below to understand how we filter
+# tokens within a parsed resource.
 class PuppetResource
   attr_accessor :profile_module, :role_module
 
@@ -49,63 +53,79 @@ class PuppetResource
   # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
 
   def params
+    # Lazy-load and return all the parameters of the resource
     @params || parse_params
   end
 
   def profile_module
+    # Return the name of the module where profiles are located
     @profile_module || 'profile'
   end
 
   def role_module
+    # Return the name of the module where roles are located
     @role_module || 'role'
   end
 
   def class?
+    # True if this is a class,
     @resource[:type] == :CLASS
   end
 
   def name
+    # Extract a normalized resource name (without the :: prefix if present)
     @resource[:name_token].value.gsub(/^::/, '')
   end
 
   def path
+    # Path of the resource
     @resource[:path]
   end
 
   def filename
-    puts @resource
+    # File name of the resource
     @resource[:filename]
   end
 
   def module_name
+    # Module containing this resource
     name.split('::')[0]
   end
 
   def profile?
+    # True if the resource is in the profile module
     class? && (module_name == profile_module)
   end
 
   def role?
+    # True if the resource is in the role module
     class? && (module_name == role_module)
   end
 
   def hiera_calls
+    # Returns an array of all the tokens referencing calls to hiera
     @resource[:tokens].select(&:hiera?)
   end
 
   def included_classes
+    # Returns an array of all the classes included (with require/include)
     @resource[:tokens].map(&:included_class).compact
   end
 
   def declared_classes
+    # Returns an array of all the declared classes
     @resource[:tokens].map(&:declared_class).compact
   end
 
   def declared_resources
+    # Returns an array of all the declared classes
     @resource[:tokens].select(&:declared_type?)
   end
 
   def resource?(name)
+    # Arguments:
+    #   name (string) Name of the resource we want to search
+    # Returns an array of all the defines of the specified resource
     @resource[:tokens].select { |t| t.declared_type? && t.value.gsub(/^::/, '') == name }
   end
 end
@@ -116,18 +136,22 @@ class PuppetLint
     class Token
       # Extend the basic token with utility functions
       def function?
+        # A function is something that has a name and is followed by a left parens
         @type == :NAME && @next_code_token.type == :LPAREN
       end
 
       def hiera?
+        # A function call specifically calling hiera
         function? && @value == 'hiera'
       end
 
       def class_include?
+        # Object is either "include" or "require", and the next token is not a =>
         @type == :NAME && ['include', 'require'].include?(@value) && @next_code_token.type != :FARROW
       end
 
       def included_class
+        # Fetch the token describing the included class
         return unless class_include?
         return @next_code_token.next_code_token if @next_code_token.type == :LPAREN
         @next_code_token
@@ -141,6 +165,7 @@ class PuppetLint
       end
 
       def declared_type?
+        # The token is a name and the next token is a {, while the previous one is not "class"
         @type == :NAME && @next_code_token.type == :LBRACE && @prev_code_token.type != :CLASS
       end
 
@@ -149,6 +174,7 @@ class PuppetLint
       end
 
       def role_keyword?
+        # This is a function with name "role"
         @type == :NAME && @value = 'role' && @next_code_token.type == :LPAREN
       end
     end
@@ -198,6 +224,7 @@ def check_define(define)
 end
 
 def hiera(klass)
+  # Searches for hiera calls inside classes and defines.
   hiera_errors(klass.hiera_calls, klass)
 end
 
@@ -216,6 +243,9 @@ def params_without_hiera_defaults(klass)
 end
 
 def hiera_not_in_params(klass)
+  # Checks if a hiera call is not in a parameter declaration. Used to check profiles
+
+  # Any hiera call that is not inside a parameter declaration is a violation
   tokens = klass.hiera_calls.reject do |token|
     maybe_param = token.prev_code_token.prev_code_token
     klass.params.keys.include?(maybe_param.value)
@@ -224,7 +254,9 @@ def hiera_not_in_params(klass)
 end
 
 def hiera_errors(tokens, klass)
+  # Helper for printing hiera errors nicely
   tokens.each do |token|
+    # hiera ( 'some::label' )
     value = token.next_code_token.next_code_token.value
     msg = {
       message: "wmf-style: Found hiera call in #{klass.type} '#{klass.name}' for '#{value}'",
@@ -236,6 +268,9 @@ def hiera_errors(tokens, klass)
 end
 
 def profile_illegal_include(klass)
+  # Check if a profile includes any class that's not allowed there.
+  # Allowed are: any other profile, or a class from the passwords module,
+  # plus a couple parameter classes
   modules_include_ok = ['profile', 'passwords']
   classes_include_ok = ['lvs::configuration', 'network::constants']
   klass.included_classes.each do |token|
@@ -253,6 +288,7 @@ def profile_illegal_include(klass)
 end
 
 def class_illegal_include(klass)
+  # A class should only include classes from the same module.
   modules_include_ok = [klass.module_name]
   klass.included_classes.each do |token|
     class_name = token.value.gsub(/^::/, '')
@@ -268,6 +304,7 @@ def class_illegal_include(klass)
 end
 
 def include_not_profile(klass)
+  # Checks that a role only includes other roles, profiles and/or the special class "standard"
   modules_include_ok = ['role', 'profile', 'standard']
   klass.included_classes.each do |token|
     class_name = token.value.gsub(/^::/, '')
@@ -312,6 +349,7 @@ def check_no_system_role(klass)
 end
 
 def check_system_role(klass)
+  # Check that a role does indeed declare system::role
   return if klass.resource?('system::role').length == 1
   msg = {
     message: "wmf-style: role '#{klass.name}' should declare system::role once",
@@ -322,6 +360,7 @@ def check_system_role(klass)
 end
 
 def check_no_defines(klass)
+  # In a role, check if there is any define apart from one system::role call
   return if klass.declared_resources == klass.resource?('system::role')
   msg = {
     message: "wmf-style: role '#{klass.name}' should not include defines",
@@ -329,6 +368,21 @@ def check_no_defines(klass)
     column: 1
   }
   notify :error, msg
+end
+
+def check_deprecations(resource)
+  # Check the resource for declarations of deprecated defines
+  deprecated_defines = ['base::service_unit']
+  deprecated_defines.each do |deprecated|
+    resource.resource?(deprecated).each do |token|
+      msg = {
+        message: "wmf-style: '#{resource.name}' should not include the deprecated define '#{token.value}'",
+        line: token.line,
+        column: token.column
+      }
+      notify :error, msg
+    end
+  end
 end
 
 # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/AbcSize, Metrics/CyclomaticComplexity
@@ -420,6 +474,7 @@ PuppetLint.new_check(:wmf_styleguide) do
       else
         check_class klass
       end
+      check_deprecations klass
     end
   end
 
@@ -428,6 +483,7 @@ PuppetLint.new_check(:wmf_styleguide) do
     defined_type_indexes.each do |df|
       define = PuppetResource.new(df)
       check_define define
+      check_deprecations define
     end
     node_indexes.each do |node|
       check_node node

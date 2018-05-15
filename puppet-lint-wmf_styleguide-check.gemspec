@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 Gem::Specification.new do |spec|
   spec.name        = 'puppet-lint-wmf_styleguide-check'
-  spec.version     = '1.0.1'
+  spec.version     = '1.0.2'
   spec.homepage    = 'https://github.com/lavagetto/puppet-lint-wmf_styleguide-check'
   spec.license     = 'GPLv3'
   spec.author      = 'Giuseppe Lavagetto'
@@ -23,6 +25,7 @@ Gem::Specification.new do |spec|
     * Check for system::role calls outside of roles
     * Check for cross-module class inclusion
     * Check for the use of the include keyword in profiles
+    * Check for wmf-deprecated resources usage
   EOF
 
   spec.add_dependency 'puppet-lint', '~> 2.0.0'

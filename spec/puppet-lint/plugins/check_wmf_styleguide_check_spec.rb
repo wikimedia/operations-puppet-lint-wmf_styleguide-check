@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 class_ok = <<-EOF
@@ -88,6 +90,12 @@ node 'fixme' {
 }
 EOF
 
+deprecation_ko = <<-EOF
+define test() {
+   base::service_unit{ 'test2': }
+}
+EOF
+
 describe 'wmf_styleguide' do
   context 'class correctly written' do
     let(:code) { class_ok }
@@ -175,6 +183,13 @@ describe 'wmf_styleguide' do
     end
     it 'should not declare any defined type' do
       expect(problems).to contain_error("wmf-style: node 'fixme' declares interface::mapped")
+    end
+  end
+
+  context 'defined type with deprecations' do
+    let(:code) { deprecation_ko }
+    it 'should not' do
+      expect(problems).to contain_error("wmf-style: 'test' should not include the deprecated define 'base::service_unit'")
     end
   end
 end
