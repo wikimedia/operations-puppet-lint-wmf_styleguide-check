@@ -142,7 +142,7 @@ class PuppetLint
 
       def hiera?
         # A function call specifically calling hiera
-        function? && @value == 'hiera'
+        function? && ['hiera', 'hiera_array', 'hiera_hash', 'lookup'].include?(@value)
       end
 
       def class_include?

@@ -23,7 +23,10 @@ class foo($t=hiera('foo::title')) {
 EOF
 
 profile_ok = <<-EOF
-class profile::foobar ($test=hiera('profile::foobar::test')) {
+class profile::foobar (
+      $test=hiera('profile::foobar::test'),
+      $foo=hiera_array('profile::foobar::foo')
+) {
       require ::profile::foo
       include ::passwords::redis
       class { '::bar': }
