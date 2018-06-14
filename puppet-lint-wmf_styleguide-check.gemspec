@@ -4,7 +4,7 @@ Gem::Specification.new do |spec|
   spec.name        = 'puppet-lint-wmf_styleguide-check'
   spec.version     = '1.0.2'
   spec.homepage    = 'https://github.com/lavagetto/puppet-lint-wmf_styleguide-check'
-  spec.license     = 'GPLv3'
+  spec.license     = 'GPL-3.0'
   spec.author      = 'Giuseppe Lavagetto'
   spec.email       = 'lavagetto@gmail.com'
   spec.files       = Dir[
@@ -29,10 +29,10 @@ Gem::Specification.new do |spec|
   EOF
 
   spec.add_dependency 'puppet-lint', '~> 2.0.0'
-  spec.add_development_dependency 'git', '~> 1.3.0'
+  spec.add_development_dependency 'git', '~> 1.3'
   spec.add_development_dependency 'rspec', '~> 3.0'
   spec.add_development_dependency 'rspec-its', '~> 1.0'
   spec.add_development_dependency 'rspec-collection_matchers', '~> 1.0'
-  spec.add_development_dependency 'rake'
+  spec.add_development_dependency 'rake', '~> 12.0'
   spec.add_development_dependency 'rubocop', '~> 0.49.1'
 end
