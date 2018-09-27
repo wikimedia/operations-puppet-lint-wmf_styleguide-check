@@ -137,7 +137,7 @@ class PuppetLint
       # Extend the basic token with utility functions
       def function?
         # A function is something that has a name and is followed by a left parens
-        @type == :NAME && @next_code_token.type == :LPAREN
+        [:NAME, :FUNCTION_NAME].include?(@type) && @next_code_token.type == :LPAREN
       end
 
       def hiera?
