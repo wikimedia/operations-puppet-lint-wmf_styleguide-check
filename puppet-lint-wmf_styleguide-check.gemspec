@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name        = 'puppet-lint-wmf_styleguide-check'
-  spec.version     = '1.0.2'
+  spec.version     = '1.0.3'
   spec.homepage    = 'https://github.com/lavagetto/puppet-lint-wmf_styleguide-check'
   spec.license     = 'GPL-3.0'
   spec.author      = 'Giuseppe Lavagetto'
