@@ -145,6 +145,11 @@ class PuppetLint
         function? && ['hiera', 'hiera_array', 'hiera_hash', 'lookup'].include?(@value)
       end
 
+      def lookup?
+        # A function call specifically calling lookup
+        function? && ['lookup'].include?(@value)
+      end
+
       def class_include?
         # Object is either "include" or "require", and the next token is not a =>
         @type == :NAME && ['include', 'require'].include?(@value) && @next_code_token.type != :FARROW
@@ -184,7 +189,7 @@ end
 # Checks and functions
 def check_profile(klass)
   # All parameters of profiles should have a default value that is a hiera lookup
-  params_without_hiera_defaults klass
+  params_without_lookup_defaults klass
   # All hiera lookups should be in parameters
   hiera_not_in_params klass
   # Only a few selected classes should be included in a profile
@@ -228,16 +233,18 @@ def hiera(klass)
   hiera_errors(klass.hiera_calls, klass)
 end
 
-def params_without_hiera_defaults(klass)
+def params_without_lookup_defaults(klass)
   # Finds parameters that have no hiera-defined default value.
   klass.params.each do |name, data|
-    next unless data[:value].select(&:hiera?).empty?
+    next unless data[:value].select(&:lookup?).empty?
+    common = "wmf-style: Parameter '#{name}' of class '#{klass.name}'"
+    message = if data[:value].select(&:hiera?).empty?
+                "#{common} has no call to lookup"
+              else
+                "#{common}: hiera is deprecated use lookup"
+              end
     token = data[:param]
-    msg = {
-      message: "wmf-style: Parameter '#{name}' of class '#{klass.name}' has no call to hiera",
-      line: token.line,
-      column: token.column
-    }
+    msg = { message: message, line: token.line, column: token.column }
     notify :error, msg
   end
 end
@@ -304,8 +311,8 @@ def class_illegal_include(klass)
 end
 
 def include_not_profile(klass)
-  # Checks that a role only includes other roles, profiles and/or the special class "standard"
-  modules_include_ok = ['role', 'profile', 'standard']
+  # Checks that a role only includes other roles and profiles
+  modules_include_ok = ['role', 'profile']
   klass.included_classes.each do |token|
     class_name = token.value.gsub(/^::/, '')
     module_name = class_name.split('::')[0]

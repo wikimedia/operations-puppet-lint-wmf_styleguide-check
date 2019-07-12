@@ -24,8 +24,7 @@ EOF
 
 profile_ok = <<-EOF
 class profile::foobar (
-      $test=hiera('profile::foobar::test'),
-      $foo=hiera_array('profile::foobar::foo')
+      $test=lookup('profile::foobar::test'),
 ) {
       require ::profile::foo
       include ::passwords::redis
@@ -35,7 +34,10 @@ EOF
 
 profile_ko = <<-EOF
 class profile::fixme (
-      $test,
+      $test1,
+      $test2=hiera('profile::foobar::foo')
+      $test3=hiera_array('profile::foobar::foo')
+      $test4=hiera_hash('profile::foobar::foo')
 ) {
     include ::apache2::common
     $role = hiera('role')
@@ -45,7 +47,6 @@ EOF
 
 role_ok = <<-EOF
 class role::fizzbuz {
-      include standard
       include ::profile::base
       include ::profile::bar
       system::role { 'fizzbuzz': }
@@ -135,16 +136,19 @@ describe 'wmf_styleguide' do
   context 'profile with errors' do
     let(:code) { profile_ko }
     it 'should create errors for parameters without hiera defaults' do
-      expect(problems).to contain_error("wmf-style: Parameter 'test' of class 'profile::fixme' has no call to hiera").on_line(2).in_column(7)
+      expect(problems).to contain_error("wmf-style: Parameter 'test1' of class 'profile::fixme' has no call to lookup").on_line(2).in_column(7)
+      expect(problems).to contain_error("wmf-style: Parameter 'test2' of class 'profile::fixme': hiera is deprecated use lookup").on_line(3).in_column(7)
+      expect(problems).to contain_error("wmf-style: Parameter 'test3' of class 'profile::fixme': hiera is deprecated use lookup").on_line(4).in_column(7)
+      expect(problems).to contain_error("wmf-style: Parameter 'test4' of class 'profile::fixme': hiera is deprecated use lookup").on_line(5).in_column(7)
     end
     it 'should create errors for hiera calls in body' do
-      expect(problems).to contain_error("wmf-style: Found hiera call in class 'profile::fixme' for 'role'").on_line(5).in_column(13)
+      expect(problems).to contain_error("wmf-style: Found hiera call in class 'profile::fixme' for 'role'").on_line(8).in_column(13)
     end
     it 'should create errors for use of system::role' do
-      expect(problems).to contain_error("wmf-style: class 'profile::fixme' declares system::role, which should only be used in roles").on_line(6).in_column(5)
+      expect(problems).to contain_error("wmf-style: class 'profile::fixme' declares system::role, which should only be used in roles").on_line(9).in_column(5)
     end
     it 'should create errors for non-explicit class inclusion' do
-      expect(problems).to contain_error("wmf-style: profile 'profile::fixme' includes non-profile class apache2::common").on_line(4).in_column(13)
+      expect(problems).to contain_error("wmf-style: profile 'profile::fixme' includes non-profile class apache2::common").on_line(7).in_column(13)
     end
   end
 
