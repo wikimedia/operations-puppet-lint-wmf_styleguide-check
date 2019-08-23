@@ -151,8 +151,8 @@ class PuppetLint
       end
 
       def class_include?
-        # Object is either "include" or "require", and the next token is not a =>
-        @type == :NAME && ['include', 'require'].include?(@value) && @next_code_token.type != :FARROW
+        # Check for include-like objects
+        @type == :NAME && ['include', 'require', 'contain'].include?(@value) && @next_code_token.type != :FARROW
       end
 
       def included_class
