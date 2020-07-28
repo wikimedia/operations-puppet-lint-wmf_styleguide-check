@@ -107,6 +107,11 @@ class PuppetResource
     @resource[:tokens].select(&:hiera?)
   end
 
+  def legacy_validate_calls
+    # Returns an array of all the tokens referencing calls to a stdlib legacy validate function
+    @resource[:tokens].select(&:legacy_validate?)
+  end
+
   def included_classes
     # Returns an array of all the classes included (with require/include)
     @resource[:tokens].map(&:included_class).compact
@@ -148,6 +153,11 @@ class PuppetLint
       def lookup?
         # A function call specifically calling lookup
         function? && ['lookup'].include?(@value)
+      end
+
+      def legacy_validate?
+        # A function calling one of the legacy stdlib validate functions
+        function? && @value.start_with?('validate_')
       end
 
       def class_include?
@@ -274,6 +284,18 @@ def hiera_errors(tokens, klass)
   end
 end
 
+def legacy_validate_errors(klass)
+  # Helper for printing errors nicely
+  klass.legacy_validate_calls.each do |token|
+    msg = {
+      message: "wmf-style: Found legacy function (#{token.value}) call in #{klass.type} '#{klass.name}'",
+      line: token.line,
+      column: token.column
+    }
+    notify :error, msg
+  end
+end
+
 def profile_illegal_include(klass)
   # Check if a profile includes any class that's not allowed there.
   # Allowed are: any other profile, or a class from the passwords module,
@@ -379,6 +401,7 @@ end
 
 def check_deprecations(resource)
   # Check the resource for declarations of deprecated defines
+  legacy_validate_errors resource
   deprecated_defines = ['base::service_unit']
   deprecated_defines.each do |deprecated|
     resource.resource?(deprecated).each do |token|

@@ -19,6 +19,8 @@ class foo($t=hiera('foo::title')) {
        notice($t)
        include ::passwords::redis
        class { 'bar': }
+       validate_foobar($param)
+       validate_re($param, '^.*$')
 }
 EOF
 
@@ -74,6 +76,8 @@ define_ko = <<-EOF
 define foo::fixme ($a=hiera('something')) {
        include ::foo
        class { '::bar': }
+       validate_foobar($param)
+       validate_re($param, '^.*$')
 }
 EOF
 
@@ -131,6 +135,10 @@ describe 'wmf_styleguide' do
       expect(problems).to contain_error("wmf-style: class 'foo' includes passwords::redis from another module").on_line(5).in_column(16)
       expect(problems).to contain_error("wmf-style: class 'foo' declares class bar from another module").on_line(6).in_column(16)
     end
+    it 'should create errors for validate_function' do
+      expect(problems).to contain_error("wmf-style: Found legacy function (validate_foobar) call in class 'foo'").on_line(7).in_column(8)
+      expect(problems).to contain_error("wmf-style: Found legacy function (validate_re) call in class 'foo'").on_line(8).in_column(8)
+    end
   end
 
   context 'profile with errors' do
@@ -171,6 +179,10 @@ describe 'wmf_styleguide' do
     end
     it 'should not include or define any class' do
       expect(problems).to contain_error("wmf-style: defined type 'foo::fixme' declares class bar from another module").on_line(3)
+    end
+    it 'should create errors for validate_function' do
+      expect(problems).to contain_error("wmf-style: Found legacy function (validate_foobar) call in defined type 'foo::fixme'").on_line(4).in_column(8)
+      expect(problems).to contain_error("wmf-style: Found legacy function (validate_re) call in defined type 'foo::fixme'").on_line(5).in_column(8)
     end
   end
 
