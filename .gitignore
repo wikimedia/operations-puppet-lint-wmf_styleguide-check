@@ -1,3 +1,4 @@
 /.bundle/
 /vendor/gems/
 /Gemfile.lock
+/puppet-lint-wmf_styleguide-check-*.gem
