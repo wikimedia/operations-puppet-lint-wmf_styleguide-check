@@ -445,12 +445,6 @@ def check_node(node)
         line: token.line,
         column: token.column
       }
-    elsif token.role_keyword? && token.next_code_token.next_code_token.next_code_token.type != :RPAREN
-      msg = {
-        message: "wmf-style: node '#{title}' includes multiple roles",
-        line: token.line,
-        column: token.column
-      }
     end
     notify :error, msg if msg
   end

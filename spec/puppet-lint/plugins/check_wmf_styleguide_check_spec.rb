@@ -89,8 +89,6 @@ EOF
 
 node_ko = <<-EOF
 node 'fixme' {
-     role(spare::system,
-          mediawiki::appserver)
      include base::firewall
      interface::mapped { 'eth0':
         foo => 'bar'
@@ -194,9 +192,6 @@ describe 'wmf_styleguide' do
   end
   context 'node with violations' do
     let(:code) { node_ko }
-    it 'should not have multiple roles applied' do
-      expect(problems).to contain_error("wmf-style: node 'fixme' includes multiple roles").on_line(2)
-    end
     it 'should not include classes directly' do
       expect(problems).to contain_error("wmf-style: node 'fixme' includes class base::firewall")
     end
