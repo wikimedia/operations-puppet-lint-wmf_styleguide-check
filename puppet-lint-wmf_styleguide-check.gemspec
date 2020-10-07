@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name        = 'puppet-lint-wmf_styleguide-check'
-  spec.version     = '1.0.5'
+  spec.version     = '1.0.6'
   spec.homepage    = 'https://github.com/lavagetto/puppet-lint-wmf_styleguide-check'
   spec.license     = 'GPL-3.0'
   spec.author      = 'Giuseppe Lavagetto'
@@ -26,6 +26,7 @@ Gem::Specification.new do |spec|
     * Check for cross-module class inclusion
     * Check for the use of the include keyword in profiles
     * Check for wmf-deprecated resources usage
+    * Check for deprecated validate_* functions
   EOF
 
   spec.add_dependency 'puppet-lint', '~> 2.0.0'
