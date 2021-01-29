@@ -14,13 +14,16 @@ EOF
 
 class_ko = <<-EOF
 class foo($t=hiera('foo::title')) {
-       $msg = hiera( "foo::bar")
+       $msg = lookup( "foo::bar")
        notice($msg)
        notice($t)
        include ::passwords::redis
        class { 'bar': }
        validate_foobar($param)
        validate_re($param, '^.*$')
+       hiera('foobar')
+       hiera_hash('foobar')
+       hiera_array('foobar')
 }
 EOF
 
@@ -42,7 +45,7 @@ class profile::fixme (
       $test4=hiera_hash('profile::foobar::foo')
 ) {
     include ::apache2::common
-    $role = hiera('role')
+    $role = lookup('role')
     system::role { $role: }
 }
 EOF
@@ -78,6 +81,9 @@ define foo::fixme ($a=hiera('something')) {
        class { '::bar': }
        validate_foobar($param)
        validate_re($param, '^.*$')
+       hiera('foobar')
+       hiera_hash('foobar')
+       hiera_array('foobar')
 }
 EOF
 
@@ -93,6 +99,10 @@ node 'fixme' {
      interface::mapped { 'eth0':
         foo => 'bar'
      }
+     lookup('foobar')
+     hiera('foobar')
+     hiera_array('foobar')
+     hiera_hash('foobar')
 }
 EOF
 
@@ -126,8 +136,8 @@ describe 'wmf_styleguide' do
   context 'class with errors' do
     let(:code) { class_ko }
     it 'should create errors for hiera declarations' do
-      expect(problems).to contain_error("wmf-style: Found hiera call in class 'foo' for 'foo::title'").on_line(1).in_column(14)
-      expect(problems).to contain_error("wmf-style: Found hiera call in class 'foo' for 'foo::bar'").on_line(2).in_column(15)
+      expect(problems).to contain_error("wmf-style: Found deprecated function (hiera) in class 'foo', use lookup instead").on_line(1).in_column(14)
+      expect(problems).to contain_error("wmf-style: Found lookup call in class 'foo' for 'foo::bar'").on_line(2).in_column(15)
     end
     it 'should create errors for included classes' do
       expect(problems).to contain_error("wmf-style: class 'foo' includes passwords::redis from another module").on_line(5).in_column(16)
@@ -137,18 +147,27 @@ describe 'wmf_styleguide' do
       expect(problems).to contain_error("wmf-style: Found legacy function (validate_foobar) call in class 'foo'").on_line(7).in_column(8)
       expect(problems).to contain_error("wmf-style: Found legacy function (validate_re) call in class 'foo'").on_line(8).in_column(8)
     end
+    it 'should create errors for hiera function' do
+      expect(problems).to contain_error("wmf-style: Found deprecated function (hiera) in class 'foo', use lookup instead").on_line(9).in_column(8)
+    end
+    it 'should create errors for hiera_hash function' do
+      expect(problems).to contain_error("wmf-style: Found deprecated function (hiera_hash) in class 'foo', use lookup instead").on_line(10).in_column(8)
+    end
+    it 'should create errors for hiera_array function' do
+      expect(problems).to contain_error("wmf-style: Found deprecated function (hiera_array) in class 'foo', use lookup instead").on_line(11).in_column(8)
+    end
   end
 
   context 'profile with errors' do
     let(:code) { profile_ko }
     it 'should create errors for parameters without hiera defaults' do
       expect(problems).to contain_error("wmf-style: Parameter 'test1' of class 'profile::fixme' has no call to lookup").on_line(2).in_column(7)
-      expect(problems).to contain_error("wmf-style: Parameter 'test2' of class 'profile::fixme': hiera is deprecated use lookup").on_line(3).in_column(7)
-      expect(problems).to contain_error("wmf-style: Parameter 'test3' of class 'profile::fixme': hiera is deprecated use lookup").on_line(4).in_column(7)
-      expect(problems).to contain_error("wmf-style: Parameter 'test4' of class 'profile::fixme': hiera is deprecated use lookup").on_line(5).in_column(7)
+      expect(problems).to contain_error("wmf-style: Parameter 'test2' of class 'profile::fixme' hiera is deprecated use lookup").on_line(3).in_column(7)
+      expect(problems).to contain_error("wmf-style: Parameter 'test3' of class 'profile::fixme' hiera is deprecated use lookup").on_line(4).in_column(7)
+      expect(problems).to contain_error("wmf-style: Parameter 'test4' of class 'profile::fixme' hiera is deprecated use lookup").on_line(5).in_column(7)
     end
     it 'should create errors for hiera calls in body' do
-      expect(problems).to contain_error("wmf-style: Found hiera call in class 'profile::fixme' for 'role'").on_line(8).in_column(13)
+      expect(problems).to contain_error("wmf-style: Found lookup call in class 'profile::fixme' for 'role'").on_line(8).in_column(13)
     end
     it 'should create errors for use of system::role' do
       expect(problems).to contain_error("wmf-style: class 'profile::fixme' declares system::role, which should only be used in roles").on_line(9).in_column(5)
@@ -173,7 +192,7 @@ describe 'wmf_styleguide' do
   context 'defined type with violations' do
     let(:code) { define_ko }
     it 'should not contain hiera calls' do
-      expect(problems).to contain_error("wmf-style: Found hiera call in defined type 'foo::fixme' for 'something'").on_line(1)
+      expect(problems).to contain_error("wmf-style: Found deprecated function (hiera) in defined type 'foo::fixme', use lookup instead").on_line(1)
     end
     it 'should not include or define any class' do
       expect(problems).to contain_error("wmf-style: defined type 'foo::fixme' declares class bar from another module").on_line(3)
@@ -181,6 +200,15 @@ describe 'wmf_styleguide' do
     it 'should create errors for validate_function' do
       expect(problems).to contain_error("wmf-style: Found legacy function (validate_foobar) call in defined type 'foo::fixme'").on_line(4).in_column(8)
       expect(problems).to contain_error("wmf-style: Found legacy function (validate_re) call in defined type 'foo::fixme'").on_line(5).in_column(8)
+    end
+    it 'should create errors for hiera function' do
+      expect(problems).to contain_error("wmf-style: Found deprecated function (hiera) in defined type 'foo::fixme', use lookup instead").on_line(6).in_column(8)
+    end
+    it 'should create errors for hiera_hash function' do
+      expect(problems).to contain_error("wmf-style: Found deprecated function (hiera_hash) in defined type 'foo::fixme', use lookup instead").on_line(7).in_column(8)
+    end
+    it 'should create errors for hiera_array function' do
+      expect(problems).to contain_error("wmf-style: Found deprecated function (hiera_array) in defined type 'foo::fixme', use lookup instead").on_line(8).in_column(8)
     end
   end
 
@@ -197,6 +225,18 @@ describe 'wmf_styleguide' do
     end
     it 'should not declare any defined type' do
       expect(problems).to contain_error("wmf-style: node 'fixme' declares interface::mapped")
+    end
+    it 'should not call lookup' do
+      expect(problems).to contain_error("wmf-style: node 'fixme' calls lookup function")
+    end
+    it 'should not call hiera' do
+      expect(problems).to contain_error("wmf-style: node 'fixme' calls legacy hiera function")
+    end
+    it 'should not call hiera_array' do
+      expect(problems).to contain_error("wmf-style: node 'fixme' calls legacy hiera_array function")
+    end
+    it 'should not call hiera_hash' do
+      expect(problems).to contain_error("wmf-style: node 'fixme' calls legacy hiera_hash function")
     end
   end
 

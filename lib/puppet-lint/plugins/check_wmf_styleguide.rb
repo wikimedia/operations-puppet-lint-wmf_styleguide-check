@@ -102,9 +102,14 @@ class PuppetResource
     class? && (module_name == role_module)
   end
 
-  def hiera_calls
+  def lookup_calls
+    # Returns an array of all the tokens referencing calls to lookup
+    @resource[:tokens].select(&:lookup?)
+  end
+
+  def legacy_hiera_calls
     # Returns an array of all the tokens referencing calls to hiera
-    @resource[:tokens].select(&:hiera?)
+    @resource[:tokens].select(&:legacy_hiera?)
   end
 
   def legacy_validate_calls
@@ -145,9 +150,9 @@ class PuppetLint
         [:NAME, :FUNCTION_NAME].include?(@type) && @next_code_token.type == :LPAREN
       end
 
-      def hiera?
-        # A function call specifically calling hiera
-        function? && ['hiera', 'hiera_array', 'hiera_hash', 'lookup'].include?(@value)
+      def legacy_hiera?
+        # Using old hiera call
+        function? && ['hiera', 'hiera_array', 'hiera_hash'].include?(@value)
       end
 
       def lookup?
@@ -198,10 +203,10 @@ end
 
 # Checks and functions
 def check_profile(klass)
-  # All parameters of profiles should have a default value that is a hiera lookup
+  # All parameters of profiles should have a default value that is a lookup
   params_without_lookup_defaults klass
-  # All hiera lookups should be in parameters
-  hiera_not_in_params klass
+  # All lookup lookups should be in parameters
+  lookup_not_in_params klass
   # Only a few selected classes should be included in a profile
   profile_illegal_include klass
   # System::role only goes in roles
@@ -210,7 +215,7 @@ end
 
 def check_role(klass)
   # Hiera lookups within a role are forbidden
-  hiera klass
+  lookup klass
   # A role should only include profiles
   include_not_profile klass
   # A call, and only one, to system::role will be done
@@ -220,8 +225,8 @@ def check_role(klass)
 end
 
 def check_class(klass)
-  # No hiera lookups allowed in a class.
-  hiera klass
+  # No lookup lookups allowed in a class.
+  lookup klass
   # Cannot include or declare classes from other modules
   class_illegal_include klass
   illegal_class_declaration klass
@@ -230,28 +235,42 @@ def check_class(klass)
 end
 
 def check_define(define)
-  # No hiera calls are admitted in defines. ever.
-  hiera define
+  # No lookup calls are admitted in defines. ever.
+  lookup define
   # No class can be included in defines, like in classes
   class_illegal_include define
   # Non-profile defines should respect the rules for classes
   illegal_class_declaration define unless define.module_name == 'profile'
 end
 
-def hiera(klass)
-  # Searches for hiera calls inside classes and defines.
-  hiera_errors(klass.hiera_calls, klass)
+def lookup(klass)
+  # Searches for lookup calls inside classes and defines.
+  lookup_errors(klass.lookup_calls, klass)
+end
+
+def legacy_hiera(klass)
+  # No calls to legacy hiera
+  tokens = klass.legacy_hiera_calls
+  tokens.each do |token|
+    msg = {
+      message: "wmf-style: Found deprecated function (#{token.value}) " \
+               "in #{klass.type} '#{klass.name}', use lookup instead",
+      line: token.line,
+      column: token.column
+    }
+    notify :error, msg
+  end
 end
 
 def params_without_lookup_defaults(klass)
-  # Finds parameters that have no hiera-defined default value.
+  # Finds parameters that have no lookup-defined default value.
   klass.params.each do |name, data|
     next unless data[:value].select(&:lookup?).empty?
     common = "wmf-style: Parameter '#{name}' of class '#{klass.name}'"
-    message = if data[:value].select(&:hiera?).empty?
+    message = if data[:value].select(&:legacy_hiera?).empty?
                 "#{common} has no call to lookup"
               else
-                "#{common}: hiera is deprecated use lookup"
+                "#{common} hiera is deprecated use lookup"
               end
     token = data[:param]
     msg = { message: message, line: token.line, column: token.column }
@@ -259,24 +278,24 @@ def params_without_lookup_defaults(klass)
   end
 end
 
-def hiera_not_in_params(klass)
-  # Checks if a hiera call is not in a parameter declaration. Used to check profiles
+def lookup_not_in_params(klass)
+  # Checks if a lookup call is not in a parameter declaration. Used to check profiles
 
-  # Any hiera call that is not inside a parameter declaration is a violation
-  tokens = klass.hiera_calls.reject do |token|
+  # Any lookup call that is not inside a parameter declaration is a violation
+  tokens = klass.lookup_calls.reject do |token|
     maybe_param = token.prev_code_token.prev_code_token
     klass.params.keys.include?(maybe_param.value)
   end
-  hiera_errors(tokens, klass)
+  lookup_errors(tokens, klass)
 end
 
-def hiera_errors(tokens, klass)
-  # Helper for printing hiera errors nicely
+def lookup_errors(tokens, klass)
+  # Helper for printing lookup errors nicely
   tokens.each do |token|
-    # hiera ( 'some::label' )
+    # lookup ( 'some::label' )
     value = token.next_code_token.next_code_token.value
     msg = {
-      message: "wmf-style: Found hiera call in #{klass.type} '#{klass.name}' for '#{value}'",
+      message: "wmf-style: Found lookup call in #{klass.type} '#{klass.name}' for '#{value}'",
       line: token.line,
       column: token.column
     }
@@ -402,6 +421,7 @@ end
 def check_deprecations(resource)
   # Check the resource for declarations of deprecated defines
   legacy_validate_errors resource
+  legacy_hiera resource
   deprecated_defines = ['base::service_unit']
   deprecated_defines.each do |deprecated|
     resource.resource?(deprecated).each do |token|
@@ -420,13 +440,18 @@ def check_node(node)
   title = node[:title_tokens].map(&:value).join(', ')
   node[:tokens].each do |token|
     msg = nil
-    if token.hiera?
+    if token.lookup?
       msg = {
-        message: "wmf-style: Found hiera call in node '#{title}'",
+        message: "wmf-style: node '#{title}' calls lookup function",
         line: token.line,
         column: token.column
       }
-
+    elsif token.legacy_hiera?
+      msg = {
+        message: "wmf-style: node '#{title}' calls legacy #{token.value} function",
+        line: token.line,
+        column: token.column
+      }
     elsif token.class_include?
       msg = {
         message: "wmf-style: node '#{title}' includes class #{token.included_class.value}",
