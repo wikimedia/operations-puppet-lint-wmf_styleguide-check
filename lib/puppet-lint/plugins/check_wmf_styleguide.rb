@@ -493,6 +493,15 @@ PuppetLint.new_check(:wmf_styleguide) do
       # If we're not within a node definition, skip this token
       next unless in_node_def
       case token.type
+      when :REGEX
+        if !token.value.start_with?('^') || !token.value.end_with?('$')
+          msg = {
+            message: "wmf-style: regex node matching must match the whole string (^...$), got: #{token.value}",
+            line: token.line,
+            column: token.column
+          }
+          notify :error, msg
+        end
       when :LBRACE
         title_tokens = tokens[start + 1..(i - 1)].select(&:node_def?) if braces_level.zero?
         braces_level += 1

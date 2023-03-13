@@ -88,7 +88,7 @@ define foo::fixme ($a=hiera('something')) {
 EOF
 
 node_ok = <<-EOF
-node /^test1.*\.example\.com$/ {
+node /^test1.*\\.example\\.com$/ {
      role(spare::system)
 }
 EOF
@@ -103,6 +103,24 @@ node 'fixme' {
      hiera('foobar')
      hiera_array('foobar')
      hiera_hash('foobar')
+}
+EOF
+
+node_regex_missing_start = <<-EOF
+node /test1.*\\.example\\.com$/ {
+     role(spare::system)
+}
+EOF
+
+node_regex_missing_end = <<-EOF
+node /^test1.*\\.example\\.com/ {
+     role(spare::system)
+}
+EOF
+
+node_regex_missing_both = <<-EOF
+node /test1.*\\.example\\.com/ {
+     role(spare::system)
 }
 EOF
 
@@ -237,6 +255,25 @@ describe 'wmf_styleguide' do
     end
     it 'should not call hiera_hash' do
       expect(problems).to contain_error("wmf-style: node 'fixme' calls legacy hiera_hash function")
+    end
+  end
+
+  context 'node regex with start violation' do
+    let(:code) { node_regex_missing_start }
+    it 'should start the regex with ^' do
+      expect(problems).to contain_error('wmf-style: regex node matching must match the whole string (^...$), got: test1.*\\.example\\.com$')
+    end
+  end
+  context 'node regex with end violation' do
+    let(:code) { node_regex_missing_end }
+    it 'should end the regex with $' do
+      expect(problems).to contain_error('wmf-style: regex node matching must match the whole string (^...$), got: ^test1.*\\.example\\.com')
+    end
+  end
+  context 'node regex with start and end violations' do
+    let(:code) { node_regex_missing_both }
+    it 'should start the regex with ^ and end it with $' do
+      expect(problems).to contain_error('wmf-style: regex node matching must match the whole string (^...$), got: test1.*\\.example\\.com')
     end
   end
 
