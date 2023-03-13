@@ -7,3 +7,13 @@ make the release for you or add you to the list of owners
 The following commands require valid credentials in ~/.gem/credentials
  * gem build puppet-lint-wmf_styleguide-check.gemspec
  * gem push push puppet-lint-wmf_styleguide-check-${version}.gem
+
+Once this has been completed you need to update the `Gemfile` in the
+operations/puppet repo. Setting `puppet-lint-wmf_styleguide-check` to the new
+version.
+
+Once this has been merged into puppet we need to update the changelog for the
+puppet/operations ci docker image.  This is avliable in the
+integrations-config` repo under `dockerfiles/operations-puppet/`. The `dch`
+command can be used to correctly formate the changelog e.g.
+ `dch -n --changelog changelog`
