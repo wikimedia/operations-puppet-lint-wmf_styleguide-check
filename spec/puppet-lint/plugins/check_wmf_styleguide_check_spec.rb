@@ -124,6 +124,12 @@ node /test1.*\\.example\\.com/ {
 }
 EOF
 
+node_regex_fixed = <<-EOF
+node /^test1.*\\.example\\.com$/ {
+     role(spare::system)
+}
+EOF
+
 deprecation_ko = <<-EOF
 define test() {
    base::service_unit{ 'test2': }
@@ -281,6 +287,29 @@ describe 'wmf_styleguide' do
     let(:code) { deprecation_ko }
     it 'should not' do
       expect(problems).to contain_error("wmf-style: 'test' should not include the deprecated define 'base::service_unit'")
+    end
+  end
+
+  context 'with fix enabled' do
+    before do
+      PuppetLint.configuration.fix = true
+    end
+
+    after do
+      PuppetLint.configuration.fix = false
+    end
+
+    context 'node regex with start violation' do
+      let(:code) { node_regex_missing_start }
+      it { expect(manifest).to eq(node_regex_fixed) }
+    end
+    context 'node regex with end violation' do
+      let(:code) { node_regex_missing_end }
+      it { expect(manifest).to eq(node_regex_fixed) }
+    end
+    context 'node regex with start and end violations' do
+      let(:code) { node_regex_missing_both }
+      it { expect(manifest).to eq(node_regex_fixed) }
     end
   end
 end

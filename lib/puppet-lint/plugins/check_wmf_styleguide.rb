@@ -280,7 +280,6 @@ end
 
 def lookup_not_in_params(klass)
   # Checks if a lookup call is not in a parameter declaration. Used to check profiles
-
   # Any lookup call that is not inside a parameter declaration is a violation
   tokens = klass.lookup_calls.reject do |token|
     maybe_param = token.prev_code_token.prev_code_token
@@ -498,7 +497,9 @@ PuppetLint.new_check(:wmf_styleguide) do
           msg = {
             message: "wmf-style: regex node matching must match the whole string (^...$), got: #{token.value}",
             line: token.line,
-            column: token.column
+            column: token.column,
+            token: token,
+            problem: 'node_regex'
           }
           notify :error, msg
         end
@@ -546,5 +547,16 @@ PuppetLint.new_check(:wmf_styleguide) do
     node_indexes.each do |node|
       check_node node
     end
+  end
+
+  def fix_node_regex(problem)
+    problem[:token].value.insert(0, '^') unless problem[:token].value.start_with?('^')
+    problem[:token].value << '$' unless problem[:token].value.end_with?('$')
+  end
+
+  def fix(problem)
+    raise PuppetLint::NoFix unless problem[:problem] == 'node_regex'
+    method = "fix_#{problem[:problem]}"
+    send(method, problem) if respond_to? method
   end
 end
