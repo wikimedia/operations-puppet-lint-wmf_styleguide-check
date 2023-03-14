@@ -1,3 +1,7 @@
+## 2022-03-15
+### 1.1.2
+ * Add fixer for node regex check
+
 ## 2022-03-14
 ### 1.1.1
  * Add checks ensure node definitions have regex anchors for start and end of string
