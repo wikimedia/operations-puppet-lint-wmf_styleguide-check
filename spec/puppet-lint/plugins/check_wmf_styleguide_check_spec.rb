@@ -88,7 +88,19 @@ define foo::fixme ($a=hiera('something')) {
 EOF
 
 node_ok = <<-EOF
-node /^test1.*\\.example\\.com$/ {
+node /^test1.*\\.eqiad\\./ {
+     role(spare::system)
+}
+EOF
+
+node_ok_wikimedia = <<-EOF
+node /^test1.*\\.wikimedia\\./ {
+     role(spare::system)
+}
+EOF
+
+node_default = <<-EOF
+node default {
      role(spare::system)
 }
 EOF
@@ -106,26 +118,38 @@ node 'fixme' {
 }
 EOF
 
+node_regex_with_wmf_tld = <<-EOF
+node /^test1.*\\.eqiad\\.wmnet/ {
+     role(spare::system)
+}
+EOF
+
+node_regex_with_org_tld = <<-EOF
+node /^test1.*\\.wikimedia\\.org/ {
+     role(spare::system)
+}
+EOF
+
 node_regex_missing_start = <<-EOF
-node /test1.*\\.example\\.com$/ {
+node /test1.*\\.eqiad\\./ {
      role(spare::system)
 }
 EOF
 
-node_regex_missing_end = <<-EOF
-node /^test1.*\\.example\\.com/ {
-     role(spare::system)
-}
-EOF
-
-node_regex_missing_both = <<-EOF
-node /test1.*\\.example\\.com/ {
+node_regex_with_end = <<-EOF
+node /^test1.*\\.eqiad\\.wmnet$/ {
      role(spare::system)
 }
 EOF
 
 node_regex_fixed = <<-EOF
-node /^test1.*\\.example\\.com$/ {
+node /^test1.*\\.eqiad\\./ {
+     role(spare::system)
+}
+EOF
+
+node_regex_fixed_wmf_tld = <<-EOF
+node /^test1.*\\.eqiad\\./ {
      role(spare::system)
 }
 EOF
@@ -242,6 +266,21 @@ describe 'wmf_styleguide' do
       expect(problems).to have(0).problems
     end
   end
+
+  context 'node wikimedia.org with no errors' do
+    let(:code) { node_ok_wikimedia }
+    it 'should not detect any problems' do
+      expect(problems).to have(0).problems
+    end
+  end
+
+  context 'node default with no errors' do
+    let(:code) { node_default }
+    it 'should not detect any problems' do
+      expect(problems).to have(0).problems
+    end
+  end
+
   context 'node with violations' do
     let(:code) { node_ko }
     it 'should not include classes directly' do
@@ -262,24 +301,36 @@ describe 'wmf_styleguide' do
     it 'should not call hiera_hash' do
       expect(problems).to contain_error("wmf-style: node 'fixme' calls legacy hiera_hash function")
     end
+    it 'should use a regex' do
+      expect(problems).to contain_error('wmf-style: node definition must use a regex, got: fixme')
+    end
+  end
+
+  context 'node regex with wmnet tld violation' do
+    let(:code) { node_regex_with_wmf_tld }
+    it 'should not contain the wmnet tld' do
+      expect(problems).to contain_error("wmf-style: node regex must not contain the '.wmnet' tld got: ^test1.*\\.eqiad\\.wmnet")
+    end
+  end
+
+  context 'node regex with org tld violation' do
+    let(:code) { node_regex_with_org_tld }
+    it 'should not contain the wmnet tld' do
+      expect(problems).to contain_error("wmf-style: node regex must not contain the '.org' tld got: ^test1.*\\.wikimedia\\.org")
+    end
   end
 
   context 'node regex with start violation' do
     let(:code) { node_regex_missing_start }
     it 'should start the regex with ^' do
-      expect(problems).to contain_error('wmf-style: regex node matching must match the whole string (^...$), got: test1.*\\.example\\.com$')
+      expect(problems).to contain_error("wmf-style: node regex must match the start of the hostname with '^' got: test1.*\\.eqiad\\.")
     end
   end
+
   context 'node regex with end violation' do
-    let(:code) { node_regex_missing_end }
-    it 'should end the regex with $' do
-      expect(problems).to contain_error('wmf-style: regex node matching must match the whole string (^...$), got: ^test1.*\\.example\\.com')
-    end
-  end
-  context 'node regex with start and end violations' do
-    let(:code) { node_regex_missing_both }
-    it 'should start the regex with ^ and end it with $' do
-      expect(problems).to contain_error('wmf-style: regex node matching must match the whole string (^...$), got: test1.*\\.example\\.com')
+    let(:code) { node_regex_with_end }
+    it 'should not end the regex with $' do
+      expect(problems).to contain_error("wmf-style: node regex must not match the end of the hostname with '$' got: ^test1.*\\.eqiad\\.wmnet$")
     end
   end
 
@@ -304,12 +355,12 @@ describe 'wmf_styleguide' do
       it { expect(manifest).to eq(node_regex_fixed) }
     end
     context 'node regex with end violation' do
-      let(:code) { node_regex_missing_end }
+      let(:code) { node_regex_with_end }
       it { expect(manifest).to eq(node_regex_fixed) }
     end
-    context 'node regex with start and end violations' do
-      let(:code) { node_regex_missing_both }
-      it { expect(manifest).to eq(node_regex_fixed) }
+    context 'node regex with tld violation' do
+      let(:code) { node_regex_with_wmf_tld }
+      it { expect(manifest).to eq(node_regex_fixed_wmf_tld) }
     end
   end
 end
