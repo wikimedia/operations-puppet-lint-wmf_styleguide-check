@@ -190,7 +190,7 @@ class PuppetLint
       end
 
       def node_def?
-        [:SSTRING, :STRING, :NAME, :REGEX].include?(@type)
+        [:SSTRING, :STRING, :NAME, :REGEX, :DEFAULT].include?(@type)
       end
 
       def role_keyword?
@@ -493,9 +493,40 @@ PuppetLint.new_check(:wmf_styleguide) do
       next unless in_node_def
       case token.type
       when :REGEX
-        if !token.value.start_with?('^') || !token.value.end_with?('$')
+        unless token.value.start_with?('^')
           msg = {
-            message: "wmf-style: regex node matching must match the whole string (^...$), got: #{token.value}",
+            message: "wmf-style: node regex must match the start of the hostname with '^' got: #{token.value}",
+            line: token.line,
+            column: token.column,
+            token: token,
+            problem: 'node_regex'
+          }
+          notify :error, msg
+        end
+        if token.value.end_with?('$')
+          msg = {
+            message: "wmf-style: node regex must not match the end of the hostname with '$' got: #{token.value}",
+            line: token.line,
+            column: token.column,
+            token: token,
+            problem: 'node_regex'
+          }
+          notify :error, msg
+        end
+        ['.wmnet', '.org'].each do |tld|
+          next unless token.value.index(tld)
+          msg = {
+            message: "wmf-style: node regex must not contain the '#{tld}' tld got: #{token.value}",
+            line: token.line,
+            column: token.column,
+            token: token,
+            problem: 'node_regex'
+          }
+          notify :error, msg
+        end
+        if !token.value.match(/\\?\.wikimedia\\?\.org/) && !token.value.end_with?('\.')
+          msg = {
+            message: "wmf-style: datacenter node regex must match subdomain end with '\.': #{token.value}",
             line: token.line,
             column: token.column,
             token: token,
@@ -504,7 +535,19 @@ PuppetLint.new_check(:wmf_styleguide) do
           notify :error, msg
         end
       when :LBRACE
-        title_tokens = tokens[start + 1..(i - 1)].select(&:node_def?) if braces_level.zero?
+        if braces_level.zero?
+          title_tokens = tokens[start + 1..(i - 1)].select(&:node_def?)
+          unless title_tokens[0].type == :REGEX || title_tokens[0].type == :DEFAULT
+            msg = {
+              message: "wmf-style: node definition must use a regex, got: #{title_tokens[0].value}",
+              line: token.line,
+              column: token.column,
+              token: token,
+              problem: 'node_regex'
+            }
+            notify :error, msg
+          end
+        end
         braces_level += 1
       when :RBRACE
         braces_level -= 1
@@ -549,10 +592,15 @@ PuppetLint.new_check(:wmf_styleguide) do
     end
   end
 
+  # rubocop:disable Metrics/AbcSize
   def fix_node_regex(problem)
     problem[:token].value.insert(0, '^') unless problem[:token].value.start_with?('^')
-    problem[:token].value << '$' unless problem[:token].value.end_with?('$')
+    problem[:token].value.chop! if problem[:token].value.end_with?('$')
+    ['wmnet', 'org'].each do |tld|
+      problem[:token].value.slice!(/#{tld}/) if problem[:token].value =~ /\\?\.#{tld}/
+    end
   end
+  # rubocop:enable Metrics/AbcSize
 
   def fix(problem)
     raise PuppetLint::NoFix unless problem[:problem] == 'node_regex'
