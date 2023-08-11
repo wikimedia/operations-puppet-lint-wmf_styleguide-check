@@ -1,19 +1,33 @@
 # New Releases
 
-Current owners of this package are jbond@wikimedia.org and joe@wikimedia.org if
-a new release is required please contact one of these engineers and ask them to
-make the release for you or add you to the list of owners
+Current owners of this package are jbond@wikimedia.org, jhathaway@wikimedia.org
+and joe@wikimedia.org if a new release is required please contact one of these
+engineers and ask them to make the release for you or add you to the list of owners
 
-The following commands require valid credentials in ~/.gem/credentials
+### Publish the new gem
+ * ensure you have valid credentials in ~/.gem/credentials
+ * Once all changes have been merged create a final CR which updates the CHANGLOG and
+   bumps the version e.g.
+   https://gerrit.wikimedia.org/r/c/operations/puppet-lint/wmf_styleguide-check/+/948148
  * gem build puppet-lint-wmf_styleguide-check.gemspec
  * gem push push puppet-lint-wmf_styleguide-check-${version}.gem
 
-Once this has been completed you need to update the `Gemfile` in the
-operations/puppet repo. Setting `puppet-lint-wmf_styleguide-check` to the new
-version.
 
-Once this has been merged into puppet we need to update the changelog for the
-puppet/operations ci docker image.  This is avliable in the
-integrations-config` repo under `dockerfiles/operations-puppet/`. The `dch`
-command can be used to correctly formate the changelog e.g.
- `dch -n --changelog changelog`
+### Update the puppet repo
+ * Once the gem has been published you will need to update the `Gemfile` in the
+   operations/puppet repo. Setting `puppet-lint-wmf_styleguide-check` to the new
+   version.
+   e.g. https://gerrit.wikimedia.org/r/c/operations/puppet/+/948152
+
+### Bump the CI image changelog to force a rebuild
+ * Once the puppet changes have been merged into puppet. we need to update the changelog
+   for the puppet/operations ci docker image.  This is available in the
+   `integrations/config` repo under `dockerfiles/operations-puppet/`. The `dch` command
+   can be used to correctly formate the changelog e.g. `dch -n --changelog changelog`
+ * If you have +2 rights on the repo then merge the repo and follow the instructions for
+   "Docker image buiding and publishing" from the README file in the `integrations/config`
+   repo
+
+### Test it
+ * finnaly create a new CR with some issue that the new release should detect.
+ * send it to gerrit and make sure jenkins CI spots the issue
