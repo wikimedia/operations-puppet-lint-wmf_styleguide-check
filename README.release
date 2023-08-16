@@ -26,8 +26,15 @@ engineers and ask them to make the release for you or add you to the list of own
    can be used to correctly formate the changelog e.g. `dch -n --changelog changelog`
  * If you have +2 rights on the repo then merge the repo and follow the instructions for
    "Docker image buiding and publishing" from the README file in the `integrations/config`
-   repo
-
+   repo under `dockerfiles/operations-puppet/`. The `dch` command
+   can be used to correctly formate the changelog e.g. `dch -n --changelog changelog`
+ * at this point you should be able to download and test the image manually with e.g.
+   docker run --rm -it --user root --entrypoint bash "docker-registry.wikimedia.org/releng/operations-puppet:0.8.12
+ * once you are happy with testing you need to update the jjb job to start using the new version
+   e.g. https://gerrit.wikimedia.org/r/c/integration/config/+/949520
+ * To deploy the new jjb job to jenkins anyone in the `ciadmin` ldap group follow the instructions in
+   `integration/config`'s README in the section `Jenkins job local testing and deployment`
+#
 ### Test it
  * finnaly create a new CR with some issue that the new release should detect.
  * send it to gerrit and make sure jenkins CI spots the issue
