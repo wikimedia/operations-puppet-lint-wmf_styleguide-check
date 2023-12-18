@@ -218,8 +218,6 @@ def check_role(klass)
   lookup klass
   # A role should only include profiles
   include_not_profile klass
-  # A call, and only one, to system::role will be done
-  check_system_role klass
   # No defines should be present in a role
   check_no_defines klass
 end
@@ -393,17 +391,6 @@ def check_no_system_role(klass)
     }
     notify :error, msg
   end
-end
-
-def check_system_role(klass)
-  # Check that a role does indeed declare system::role
-  return if klass.resource?('system::role').length == 1
-  msg = {
-    message: "wmf-style: role '#{klass.name}' should declare system::role once",
-    line: 1,
-    column: 1
-  }
-  notify :error, msg
 end
 
 def check_no_defines(klass)
